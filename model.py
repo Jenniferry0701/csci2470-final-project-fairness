@@ -3,6 +3,7 @@ from tensorflow import keras
 import numpy as np
 import pandas as pd
 
+# TODO: combine/align with args from init.py?
 class ExperimentConfig:
     """Configuration for fairness experiment."""
     dataset_name: str

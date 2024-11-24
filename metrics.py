@@ -63,6 +63,7 @@ class FairnessMetrics:
         return f1_score(y_true, y_pred, zero_division=0)
     
     def get_group_metrics(self) -> Tuple[dict, dict]:
+        # TODO: refactor depending on values of protected_attributes? (not necessarily binary)
         mask_unpriv = self.protected_attributes == 0
         mask_priv = self.protected_attributes == 1
         
