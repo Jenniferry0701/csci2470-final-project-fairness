@@ -65,13 +65,16 @@ class Adversary(Vanilla):
         x = keras.layers.Dense(16, activation="relu")(intermediate_input)
         x = keras.layers.Dense(8, activation="relu")(x)
 
+        # for binary classification: 1 output, sigmoid activation
+        # for multi-class classification: # classes output, softmax activation
         adversary_outputs = [
-            keras.layers.Dense(protected_shape, activation="softmax", name=f"protected_{protected_name}_prediction")(x)
+            keras.layers.Dense(
+                1 if protected_shape == 2 else protected_shape,
+                activation="sigmoid" if protected_shape == 2 else "softmax",
+                name=f"protected_{protected_name}_prediction")(x)
             for protected_name, protected_shape in zip(self.protected_attribute_names, self.protected_shapes)
         ]
-        print("PROTECTED SHAPES")
-        print(self.protected_shapes)
-
+        
         return keras.Model(inputs=intermediate_input, outputs=adversary_outputs)
     
     def _build_adversarial_model(self) -> keras.Model:
@@ -101,7 +104,13 @@ class Adversary(Vanilla):
             optimizer="adam",
             loss={
                 "adversary_network_output": keras.losses.BinaryCrossentropy(),
-                **{f"protected_{protected_name}_prediction": keras.losses.SparseCategoricalCrossentropy() for protected_name in self.protected_attribute_names}
+                **{f"protected_{protected_name}_prediction": (
+                   keras.losses.BinaryCrossentropy()
+                   if protected_shape == 2
+                   else keras.losses.SparseCategoricalCrossentropy()
+                )
+                for protected_name, protected_shape in zip(self.protected_attribute_names, self.protected_shapes)
+                }
             },
             loss_weights={
                 "adversary_network_output": 1.0,
