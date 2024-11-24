@@ -79,7 +79,7 @@ if __name__ == "__main__":
     protected_train, protected_test = extract_protected_attributes(X_train, X_test, args.protected_attributes)
     protected_shapes = [len(pd.Series(attr).unique()) for attr in protected_train]
 
-    # train Vanilla DNN model
+    # Train Vanilla DNN model
     vanilla_model = train_vanilla_model(X_train_scaled, y_train, args.epochs)
     vanilla_metrics = evaluate_model(
         vanilla_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]

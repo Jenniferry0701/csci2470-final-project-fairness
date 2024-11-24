@@ -69,6 +69,8 @@ class Adversary(Vanilla):
             keras.layers.Dense(protected_shape, activation="softmax", name=f"protected_{protected_name}_prediction")(x)
             for protected_name, protected_shape in zip(self.protected_attribute_names, self.protected_shapes)
         ]
+        print("PROTECTED SHAPES")
+        print(self.protected_shapes)
 
         return keras.Model(inputs=intermediate_input, outputs=adversary_outputs)
     

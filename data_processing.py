@@ -16,7 +16,7 @@ def process_adult():
 
     df_processed = df[selected_features]
 
-    df_processed.loc[:, 'race'] = df_processed['race'].apply(lambda x: 1 if x == 'White' else 0)
+    df_processed.loc[:, 'race'] = df_processed['race'].apply(lambda x: 1 if x == ' White' else 0)
     # 'male' -> 1, 'female' -> 0
     df_processed.loc[:, 'sex'] = df_processed['sex'].map({' Male': 1, ' Female': 0})
     df_processed.loc[:, 'Probability'] = df_processed['Probability'].map({' >50K': 1, ' <=50K': 0})
@@ -72,9 +72,12 @@ def process_default():
     # 'male' : 1 -> 1, 'female' : 2 -> 0
     df_processed.loc[:, 'sex'] = df_processed['sex'].map({1: 1, 2: 0})
 
+    # reindex 'age' column to ensure it fits into the range [0, num_unique_ages]
+    unique_ages = df_processed['age'].unique()
+    age_to_index = {age: idx for idx, age in enumerate(sorted(unique_ages))}
+    df_processed.loc[:, 'age'] = df_processed['age'].map(age_to_index)
+
     df_processed.to_csv('./data/default_processed.csv', index=False)
-
-
 
 if __name__ == "__main__":
     process_adult()
