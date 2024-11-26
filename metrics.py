@@ -106,7 +106,7 @@ class FairnessMetrics:
         for unpriv_metrics, priv_metrics in zip(unpriv_metrics_list, priv_metrics_list):
             prob_pos_unpriv = unpriv_metrics['positive_pred'] / unpriv_metrics['total']
             prob_pos_priv = priv_metrics['positive_pred'] / priv_metrics['total']
-            spd_val_list.append(prob_pos_unpriv - prob_pos_priv)
+            spd_val_list.append(round(prob_pos_unpriv - prob_pos_priv, 2))
         
         return spd_val_list
     
@@ -134,7 +134,7 @@ class FairnessMetrics:
             fpr_priv = (priv_metrics['false_positive'] / 
                         (priv_metrics['total'] - priv_metrics['positive_true'])
                         if (priv_metrics['total'] - priv_metrics['positive_true']) > 0 else 0)
-            aod_val_list.append(0.5 * ((fpr_unpriv - fpr_priv) + (tpr_unpriv - tpr_priv)))
+            aod_val_list.append(round(0.5 * ((fpr_unpriv - fpr_priv) + (tpr_unpriv - tpr_priv)), 2))
         
         return aod_val_list
     
@@ -155,7 +155,7 @@ class FairnessMetrics:
                         unpriv_metrics['positive_true'] if unpriv_metrics['positive_true'] > 0 else 0)
             tpr_priv = (priv_metrics['true_positive'] / 
                         priv_metrics['positive_true'] if priv_metrics['positive_true'] > 0 else 0)
-            eod_val_list.append(tpr_unpriv - tpr_priv)
+            eod_val_list.append(round(tpr_unpriv - tpr_priv))
         
         return eod_val_list
 

@@ -52,10 +52,11 @@ class Vanilla():
 class Adversary(Vanilla):
     """Modifying Vanilla DNN to Adversarial Network"""
 
-    def __init__(self, input_shape, protected_attribute_names, protected_shapes, batch_size=32, epochs=20, lambda_reg=0.1):
+    def __init__(self, input_shape, protected_attribute_names, protected_shapes, batch_size=32, epochs=20, lambda_reg=0.1, lr=2e-3):
         super().__init__(input_shape, batch_size, epochs)
         self.lambda_reg = lambda_reg  # lambda in combined loss formula (L = L_{vanilla} - lambda_reg * L_{adversary})
         self.protected_attribute_names = protected_attribute_names
+        self.lr = lr
         self.protected_shapes = protected_shapes # list of number of protected attribute classes for each protected attribute
         self.adversary = self._build_adversary()
         self.adversarial_model = self._build_adversarial_model()
@@ -63,6 +64,7 @@ class Adversary(Vanilla):
     def _build_adversary(self) -> keras.Model:
         intermediate_input = keras.layers.Input(shape=(8,))
         x = keras.layers.Dense(16, activation="relu")(intermediate_input)
+        x = keras.layers.Dropout(0.2)(x)
         x = keras.layers.Dense(8, activation="relu")(x)
 
         # for binary classification: 1 output, sigmoid activation
@@ -100,8 +102,10 @@ class Adversary(Vanilla):
         return combined_model
 
     def fit(self, X, y, protected_labels):
+        optimizer = keras.optimizers.Adam(learning_rate=self.lr)
+        
         self.adversarial_model.compile(
-            optimizer="adam",
+            optimizer=optimizer,
             loss={
                 "adversary_network_output": keras.losses.BinaryCrossentropy(),
                 **{f"protected_{protected_name}_prediction": (
