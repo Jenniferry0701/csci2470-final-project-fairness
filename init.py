@@ -42,14 +42,14 @@ def train_vanilla_model(X_train_scaled, y_train, num_epochs):
     model.fit(X_train_scaled, y_train)
     return model
 
-def train_adversarial_model(X_train_scaled, y_train, protected_attribute_names, protected_shapes, num_epochs, lambda_reg, protected_train, learninng_rate):
+def train_adversarial_model(X_train_scaled, y_train, protected_attribute_names, protected_shapes, num_epochs, lambda_reg, protected_train, learning_rate):
     adv_model = Adversary(
         input_shape=X_train_scaled.shape[1],
         protected_attribute_names=protected_attribute_names,
         protected_shapes=protected_shapes,
         epochs=num_epochs,
         lambda_reg=lambda_reg,
-        learninng_rate=learninng_rate
+        learning_rate=learning_rate
     )
     adv_model.fit(X_train_scaled, y_train, protected_train)
     return adv_model
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         ('-o', '--output_file', None, str),
         ('-e', '--epochs', 10, int),
         ('-lreg', '--lambda_reg', 0.1, float),
-        ('-lr', '--learning-rate', 2e-3, float),
+        ('-lr', '--learning-rate', 3e-3, float),
     ]
     args = get_args(arg_list)
     initialize_non_default_args(args)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
                                      y_test=y_test, 
                                      protected_attributes=[X_test[attr].values for attr in args.protected_attributes]
     )
-    # print(vanilla_metrics)
+    print(vanilla_metrics)
 
     # Train Adversarial DNN model
     adv_model = train_adversarial_model(X_train_scaled=X_train_scaled, 
@@ -102,10 +102,11 @@ if __name__ == "__main__":
                                         num_epochs=args.epochs, 
                                         lambda_reg=args.lambda_reg, 
                                         protected_train=protected_train,
-                                        learninng_rate=args.learninng_rate)
+                                        learning_rate=args.learning_rate)
     adv_metrics = evaluate_model(
         adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
     )
+    print(adv_metrics)
 
     save_results_to_output([vanilla_metrics , adv_metrics], args.output_file)
 

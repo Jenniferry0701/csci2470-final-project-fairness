@@ -11,6 +11,7 @@ def process_adult():
         "capital-gain",
         "capital-loss",
         "hours-per-week",
+        "native-country",
         "Probability",
     ]
 
@@ -20,6 +21,7 @@ def process_adult():
     # 'male' -> 1, 'female' -> 0
     df_processed.loc[:, 'sex'] = df_processed['sex'].map({' Male': 1, ' Female': 0})
     df_processed.loc[:, 'Probability'] = df_processed['Probability'].map({' >50K': 1, ' <=50K': 0})
+    df_processed['native-country'] = (df_processed['native-country'] == 'United-States').astype(int)
 
     df_processed.to_csv('./data/adult_processed.csv', index=False)
 

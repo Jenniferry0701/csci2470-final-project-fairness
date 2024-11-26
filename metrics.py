@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.metrics import accuracy_score,recall_score,precision_score, f1_score,matthews_corrcoef
 from typing import Tuple
+import itertools
 
 class FairnessMetrics:
     """
@@ -159,6 +160,99 @@ class FairnessMetrics:
         
         return eod_val_list
 
+class DifferentialFairnessMetrics:
+    """
+    Implementation of Differential Fairness metrics from Islam et al. (2023).
+    DF provides interpretable guarantees on fairness across intersectional groups.
+    
+    Attributes:
+        y_true: Ground truth labels (0 or 1) 
+        y_pred: Predicted probabilities or labels (0 or 1)
+        protected_attributes: List of arrays containing protected attribute values
+    """
+    def __init__(self, y_true, y_pred, protected_attributes):
+        self.y_true = y_true
+        self.y_pred = y_pred 
+        self.protected_attributes = protected_attributes
+        
+        # Dirichlet smoothing parameter
+        self.alpha = 1.0
+        
+    def get_intersectional_groups(self):
+        unique_values = [np.unique(attr) for attr in self.protected_attributes]
+        groups = list(itertools.product(*unique_values))
+        return groups
+    
+    
+    def get_group_mask(self, group_values):
+        mask = np.ones(len(self.y_true), dtype=bool)
+        for attr_idx, attr_val in enumerate(group_values):
+            mask &= (self.protected_attributes[attr_idx] == attr_val)
+        return mask
+    
+    def compute_group_probabilities(self, y, group_mask):
+        if group_mask.sum() == 0:
+            return 0
+            
+        count = np.sum(y[group_mask])
+        total = group_mask.sum()
+        prob = (count + self.alpha) / (total + 2*self.alpha)
+        return prob
+
+    def differential_fairness(self):
+        """
+        Compute the differential fairness metric ε.
+        
+        ε = max_{y,s_i,s_j} |ln P(y|s_i) - ln P(y|s_j)|
+        
+        Returns:
+            epsilon: The differential fairness score (lower is better)
+        """
+        groups = self.get_intersectional_groups()
+        
+        max_epsilon = 0
+        
+        for i in range(len(groups)):
+            for j in range(i+1, len(groups)):
+                group_i_mask = self.get_group_mask(groups[i])
+                group_j_mask = self.get_group_mask(groups[j])
+                
+                if group_i_mask.sum() == 0 or group_j_mask.sum() == 0:
+                    continue
+                
+                p_pos_i = self.compute_group_probabilities(self.y_pred, group_i_mask) 
+                p_pos_j = self.compute_group_probabilities(self.y_pred, group_j_mask)
+                p_neg_i = 1 - p_pos_i
+                p_neg_j = 1 - p_pos_j
+                
+                if p_pos_i > 0 and p_pos_j > 0:
+                    eps_pos = abs(np.log(p_pos_i) - np.log(p_pos_j))
+                else:
+                    eps_pos = 0
+                    
+                if p_neg_i > 0 and p_neg_j > 0:
+                    eps_neg = abs(np.log(p_neg_i) - np.log(p_neg_j))
+                else:
+                    eps_neg = 0
+                    
+                epsilon = max(eps_pos, eps_neg)
+                max_epsilon = max(max_epsilon, epsilon)
+                
+        return max_epsilon
+
+    def bias_amplification(self, data_epsilon):
+        """
+        Compute the DF bias amplification measure.
+        
+        Args:
+            data_epsilon: The DF score of the training data
+            
+        Returns:
+            bias_amp: ε_model - ε_data (negative values indicate reduction in bias)
+        """
+        model_epsilon = self.differential_fairness()
+        return model_epsilon - data_epsilon
+    
 def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
     """
     Compute all fairness metrics at once.
@@ -172,6 +266,9 @@ def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
         Dictionary containing all fairness metrics
     """
     metrics = FairnessMetrics(y_true, y_pred, protected_attributes)
+    df_metrics = DifferentialFairnessMetrics(y_true, y_pred, protected_attributes)
+    data_df = DifferentialFairnessMetrics(y_true, y_true, protected_attributes)
+    data_epsilon = data_df.differential_fairness()
     return {
         'accuracy': metrics.accuracy(),
         'precision': metrics.precision(),
@@ -179,5 +276,7 @@ def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
         'f1': metrics.f1(),
         'statistical_parity_difference': metrics.statistical_parity_difference(),
         'average_odds_difference': metrics.average_odds_difference(),
-        'equal_opportunity_difference': metrics.equal_opportunity_difference()
+        'equal_opportunity_difference': metrics.equal_opportunity_difference(),
+        'differential_fairness': df_metrics.differential_fairness(),
+        'df_bias_amplification': df_metrics.bias_amplification(data_epsilon)
     }

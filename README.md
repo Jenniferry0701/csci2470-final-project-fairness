@@ -13,6 +13,11 @@
     (in particular for protected attributes i'm assuming we should have 'male' -> 1, 'female' -> 0 if we are considering 0 to be "unprivileged" and 1 to be "privileged")
 3. refactored init.py (specify dataset in command line args)
 
+### what yujia added
+1. added nationality as a potential protected field in adult dataset
+2. added saving results to the output file
+3. added intersectional fairness metrics that capture multiple groups 
+
 ### TODO
 * refactor code
     - determine how to set the "privileged" vs "unprivileged" values depending on which protected attributes are being considered
