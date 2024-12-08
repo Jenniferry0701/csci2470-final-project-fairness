@@ -101,27 +101,27 @@ if __name__ == "__main__":
     protected_shapes = [len(pd.Series(attr).unique()) for attr in protected_train]
 
     # Train Vanilla DNN model
-    # vanilla_model = train_vanilla_model(X_train_scaled, y_train, args.epochs)
-    # vanilla_metrics = evaluate_model(model=vanilla_model, 
-    #                                  X_test_scaled=X_test_scaled, 
-    #                                  y_test=y_test, 
-    #                                  protected_attributes=[X_test[attr].values for attr in args.protected_attributes]
-    # )
-    # print(vanilla_metrics)
+    vanilla_model = train_vanilla_model(X_train_scaled, y_train, args.epochs)
+    vanilla_metrics = evaluate_model(model=vanilla_model, 
+                                     X_test_scaled=X_test_scaled, 
+                                     y_test=y_test, 
+                                     protected_attributes=[X_test[attr].values for attr in args.protected_attributes]
+    )
+    print("vanilla: ",vanilla_metrics)
 
-    # # Train Adversarial DNN model
-    # adv_model = train_adversarial_model(X_train_scaled=X_train_scaled, 
-    #                                     y_train=y_train, 
-    #                                     protected_attribute_names=args.protected_attributes, 
-    #                                     protected_shapes=protected_shapes, 
-    #                                     num_epochs=args.epochs, 
-    #                                     lambda_reg=args.lambda_reg, 
-    #                                     protected_train=protected_train,
-    #                                     learning_rate=args.learning_rate)
-    # adv_metrics = evaluate_model(
-    #     adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
-    # )
-    # print(adv_metrics)
+    # Train Adversarial DNN model
+    adv_model = train_adversarial_model(X_train_scaled=X_train_scaled, 
+                                        y_train=y_train, 
+                                        protected_attribute_names=args.protected_attributes, 
+                                        protected_shapes=protected_shapes, 
+                                        num_epochs=args.epochs, 
+                                        lambda_reg=args.lambda_reg, 
+                                        protected_train=protected_train,
+                                        learning_rate=args.learning_rate)
+    adv_metrics = evaluate_model(
+        adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
+    )
+    print("adversary: ", adv_metrics)
 
 
     multi_adv_model = train_multi_adversarial_model(
@@ -132,14 +132,15 @@ if __name__ == "__main__":
         num_epochs=args.epochs, 
         lambda_reg=args.lambda_reg, 
         protected_train=protected_train,
-        learning_rate=args.learning_rate,
+        learning_rate=1e-5,
         num_adversaries = 2
     )
     multi_adv_metrics = evaluate_model(
         multi_adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
     )
 
-    # save_results_to_output([vanilla_metrics , adv_metrics], args.output_file)
+    print("multi: ", multi_adv_metrics)
+    save_results_to_output([vanilla_metrics , adv_metrics, multi_adv_metrics], args.output_file)
 
 
     

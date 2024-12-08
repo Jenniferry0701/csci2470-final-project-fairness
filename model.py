@@ -216,37 +216,42 @@ class MultiAdversary(Vanilla):
     
     def fit(self, X, y, protected_labels):
         """Train the model with main task labels and protected attribute labels"""
-        # Create the combined model for training
+        # Input layer for the combined model
         input_layer = keras.layers.Input(shape=(self.input_shape,))
         
-        # Get predictor outputs
+        # Predictor outputs
         predictor_output = self.predictor(input_layer)
-        intermediate_output = self.predictor.get_layer("intermediate_layer").output
         
-        # Get all adversary outputs
-        all_adversary_outputs = []
-        for adversary in self.adversaries:
+        # Extract intermediate output from the predictor for adversaries
+        intermediate_layer_model = keras.Model(
+            inputs=self.predictor.input,
+            outputs=self.predictor.get_layer("intermediate_layer").output
+        )
+        intermediate_output = intermediate_layer_model(input_layer)
+        
+        # Adversary outputs
+        all_adversary_outputs = {}
+        for i, adversary in enumerate(self.adversaries):
             adversary_outputs = adversary(intermediate_output)
             if not isinstance(adversary_outputs, list):
                 adversary_outputs = [adversary_outputs]
-            all_adversary_outputs.extend(adversary_outputs)
+            
+            for attr_name, output in zip(self.protected_attribute_names, adversary_outputs):
+                output_name = f"adversary_{i}_{attr_name}"
+                all_adversary_outputs[output_name] = output
         
         # Create the combined model
+        combined_model_outputs = {"main_output": predictor_output, **all_adversary_outputs}
         combined_model = keras.Model(
             inputs=input_layer,
-            outputs=[predictor_output] + all_adversary_outputs
+            outputs=combined_model_outputs
         )
         
         # Compile the model
-        loss_dict = {
-            "main_output": "binary_crossentropy"
-        }
+        loss_dict = {"main_output": "binary_crossentropy"}
+        loss_weights = {"main_output": 1.0}
         
-        loss_weights = {
-            "main_output": 1.0
-        }
-        
-        # Add losses for each adversary's outputs
+        # Add adversary loss functions and weights
         for i in range(self.num_adversaries):
             for attr_name, shape in zip(self.protected_attribute_names, self.protected_shapes):
                 output_name = f"adversary_{i}_{attr_name}"
@@ -264,14 +269,13 @@ class MultiAdversary(Vanilla):
             metrics=["accuracy"]
         )
         
-        # Prepare the labels for training
-        # First, duplicate protected labels for each adversary
+        # Prepare training labels
         training_labels = {"main_output": y}
         for i in range(self.num_adversaries):
             for attr_name, labels in zip(self.protected_attribute_names, protected_labels):
                 training_labels[f"adversary_{i}_{attr_name}"] = labels
         
-        # Train the model
+        # Train the combined model
         history = combined_model.fit(
             X,
             training_labels,
@@ -281,7 +285,7 @@ class MultiAdversary(Vanilla):
         )
         
         return history
-    
+        
     def predict(self, X):
         """Make predictions using the predictor network"""
         predictions = self.predictor.predict(X)
