@@ -17,10 +17,11 @@ class ExperimentConfig:
 class Vanilla():
     """Simple Keras model"""
     
-    def __init__(self, input_shape, batch_size=32, epochs=20):
+    def __init__(self, input_shape, batch_size=32, epochs=20, learning_rate=3e-3):
         self.input_shape = input_shape
         self.epochs = epochs
         self.batch_size = batch_size
+        self.learning_rate = learning_rate
         self.model = self._build_model()
         
     def _build_model(self) -> keras.Sequential:
@@ -34,9 +35,10 @@ class Vanilla():
         ])
         
     def fit(self, X, y):
+        optimizer = keras.optimizers.Adam(learning_rate=self.learning_rate)
         self.model.compile(
             loss="binary_crossentropy",
-            optimizer="nadam",
+            optimizer=optimizer,
             metrics=["accuracy", 
                     keras.metrics.AUC(),
                     keras.metrics.Precision(),
@@ -182,9 +184,9 @@ class MultiAdversary(Vanilla):
         """Create a single adversary with unique architecture"""
         # Different adversaries get different architectures
         architectures = {
-            'adversary_0': [32, 16, 8],  # Deep network
-            'adversary_1': [64, 32],     # Wide network
-            'adversary_2': [16, 16, 16]  # Uniform network
+            'adversary_0': [64, 32, 16],  # Deep network
+            'adversary_1': [128, 64],     # Wide network
+            'adversary_2': [32, 32, 32]  # Uniform network
         }
         
         # Input layer for intermediate representations

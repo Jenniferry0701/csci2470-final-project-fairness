@@ -1,8 +1,10 @@
 from metrics import compute_all_metrics
-from utils import read_and_split_data, get_args
+from utils import read_data, read_and_split_data, get_args
 from model import Vanilla, Adversary, MultiAdversary
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
+from sklearn.model_selection import KFold
+
 
 def initialize_protected_attributes(dataset):
     """
@@ -92,55 +94,79 @@ if __name__ == "__main__":
         ('-e', '--epochs', 10, int),
         ('-lreg', '--lambda_reg', 0.1, float),
         ('-lr', '--learning-rate', 3e-3, float),
+        ('-f', '--folds', 5, int)
     ]
     args = get_args(arg_list)
     initialize_non_default_args(args)
-   
-    X_train, X_test, X_train_scaled, X_test_scaled, y_train, y_test = preprocess_data(args.dataset_path)
-    protected_train, protected_test = extract_protected_attributes(X_train, X_test, args.protected_attributes)
-    protected_shapes = [len(pd.Series(attr).unique()) for attr in protected_train]
+    X, y = read_data(args.dataset_path, "Probability")
+    # learning_rates = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]
+    learning_rates=[3e-3]
 
-    # Train Vanilla DNN model
-    vanilla_model = train_vanilla_model(X_train_scaled, y_train, args.epochs)
-    vanilla_metrics = evaluate_model(model=vanilla_model, 
-                                     X_test_scaled=X_test_scaled, 
-                                     y_test=y_test, 
-                                     protected_attributes=[X_test[attr].values for attr in args.protected_attributes]
-    )
-    print("vanilla: ",vanilla_metrics)
+    fold_metrics = []
+    for lr in learning_rates:
+        kf = KFold(n_splits=args.folds, shuffle=True, random_state=42)
+        for fold, (train_idx, val_idx) in enumerate(kf.split(X)):
+            X_train, X_test = X.iloc[train_idx], X.iloc[val_idx]
+            y_train, y_test = y[train_idx], y[val_idx]
+            
+            scaler = StandardScaler()
+            X_train_scaled = scaler.fit_transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+            protected_train, protected_test = extract_protected_attributes(X_train, X_test, args.protected_attributes)
+            protected_shapes = [len(pd.Series(attr).unique()) for attr in protected_train]
 
-    # Train Adversarial DNN model
-    adv_model = train_adversarial_model(X_train_scaled=X_train_scaled, 
-                                        y_train=y_train, 
-                                        protected_attribute_names=args.protected_attributes, 
-                                        protected_shapes=protected_shapes, 
-                                        num_epochs=args.epochs, 
-                                        lambda_reg=args.lambda_reg, 
-                                        protected_train=protected_train,
-                                        learning_rate=args.learning_rate)
-    adv_metrics = evaluate_model(
-        adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
-    )
-    print("adversary: ", adv_metrics)
+            vanilla_model = train_vanilla_model(X_train_scaled, y_train, args.epochs)
+            vanilla_metrics = evaluate_model(model=vanilla_model, 
+                                            X_test_scaled=X_test_scaled, 
+                                            y_test=y_test, 
+                                            protected_attributes=[X_test[attr].values for attr in args.protected_attributes],
+             )
+            vanilla_metrics["fold"] = fold
+            vanilla_metrics["model"] = "vanilla"
+            vanilla_metrics["lr"] = str(lr)
+            fold_metrics.append(vanilla_metrics)
+
+            adv_model = train_adversarial_model(X_train_scaled=X_train_scaled, 
+                                                y_train=y_train, 
+                                                protected_attribute_names=args.protected_attributes, 
+                                                protected_shapes=protected_shapes, 
+                                                num_epochs=args.epochs, 
+                                                lambda_reg=args.lambda_reg, 
+                                                protected_train=protected_train,
+                                                learning_rate=lr)
+            adv_metrics = evaluate_model(
+                adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
+            )
+            adv_metrics["fold"] = fold
+            adv_metrics["model"] = "adversary"
+            adv_metrics["lr"] = str(lr)
+            adv_metrics["lambda_reg"] = args.lambda_reg
+            fold_metrics.append(adv_metrics)
 
 
-    multi_adv_model = train_multi_adversarial_model(
-        X_train_scaled=X_train_scaled, 
-        y_train=y_train, 
-        protected_attribute_names=args.protected_attributes, 
-        protected_shapes=protected_shapes, 
-        num_epochs=args.epochs, 
-        lambda_reg=args.lambda_reg, 
-        protected_train=protected_train,
-        learning_rate=1e-5,
-        num_adversaries = 2
-    )
-    multi_adv_metrics = evaluate_model(
-        multi_adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
-    )
+            # multi_adv_model = train_multi_adversarial_model(
+            #     X_train_scaled=X_train_scaled, 
+            #     y_train=y_train, 
+            #     protected_attribute_names=args.protected_attributes, 
+            #     protected_shapes=protected_shapes, 
+            #     num_epochs=args.epochs, 
+            #     lambda_reg=args.lambda_reg, 
+            #     protected_train=protected_train,
+            #     learning_rate=lr,
+            #     num_adversaries = 2
+            # )
+            
+            # multi_adv_metrics = evaluate_model(
+            #     multi_adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
+            # )
+            # multi_adv_metrics["fold"] = fold
+            # multi_adv_metrics["model"] = "multi-adversary"
+            # multi_adv_metrics["lr"] = lr
+            # fold_metrics.append(multi_adv_metrics)
 
-    print("multi: ", multi_adv_metrics)
-    save_results_to_output([vanilla_metrics , adv_metrics, multi_adv_metrics], args.output_file)
+
+    # print("multi: ", multi_adv_metrics)
+        save_results_to_output(fold_metrics, args.output_file)
 
 
     

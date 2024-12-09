@@ -63,6 +63,18 @@ class FairnessMetrics:
             y_pred = self.y_pred[group_mask]
         return f1_score(y_true, y_pred, zero_division=0)
     
+    def get_intersectional_groups(self):
+        unique_values = [np.unique(attr) for attr in self.protected_attributes]
+        groups = list(itertools.product(*unique_values))
+        return groups
+    
+    def get_group_mask(self, group_values):
+        mask = np.ones(len(self.y_true), dtype=bool)
+        for attr_idx, attr_val in enumerate(group_values):
+            mask &= (self.protected_attributes[attr_idx] == attr_val)
+        return mask
+    
+    
     def get_group_metrics(self) -> Tuple[list[dict], list[dict]]:
         # TODO: refactor depending on values of protected_attributes? (not necessarily binary)
         unpriv_metrics_list = []
@@ -110,6 +122,30 @@ class FairnessMetrics:
             spd_val_list.append(round(prob_pos_unpriv - prob_pos_priv, 2))
         
         return spd_val_list
+
+    def intersectional_spd(self):
+        groups = self.get_intersectional_groups()
+        spd_vals = []
+        
+        for i, group_i in enumerate(groups):
+            mask_i = self.get_group_mask(group_i)
+            if mask_i.sum() == 0:
+                continue
+            
+            prob_pos_i = np.mean(self.y_pred[mask_i])
+            
+            for j, group_j in enumerate(groups):
+                if i == j:
+                    continue
+                
+                mask_j = self.get_group_mask(group_j)
+                if mask_j.sum() == 0:
+                    continue
+                
+                prob_pos_j = np.mean(self.y_pred[mask_j])
+                spd_vals.append(abs(prob_pos_i - prob_pos_j))
+        
+        return round(max(spd_vals), 2) if spd_vals else 0
     
     def average_odds_difference(self) -> float:
         """
@@ -274,9 +310,10 @@ def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
         'precision': metrics.precision(),
         'recall': metrics.recall(),
         'f1': metrics.f1(),
-        'statistical_parity_difference': metrics.statistical_parity_difference(),
-        'average_odds_difference': metrics.average_odds_difference(),
-        'equal_opportunity_difference': metrics.equal_opportunity_difference(),
+        'statistical_parity_difference': np.mean(metrics.statistical_parity_difference()),
+        'intersectional_spd': metrics.intersectional_spd(),
+        'average_odds_difference': np.mean(metrics.average_odds_difference()),
+        'equal_opportunity_difference': np.mean(metrics.equal_opportunity_difference()),
         'differential_fairness': df_metrics.differential_fairness(),
         'df_bias_amplification': df_metrics.bias_amplification(data_epsilon)
     }
