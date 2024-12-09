@@ -13,8 +13,7 @@ class FairnessMetrics:
         protected_attributes: Binary protected attribute values (0 or 1)
     """
     
-    def __init__(self, y_true, y_pred, protected_attributes
-    ):
+    def __init__(self, y_true, y_pred, protected_attributes, protected_attribute_names):
         """
         Initialize the FairnessMetrics class.
         
@@ -26,6 +25,7 @@ class FairnessMetrics:
         self.y_true = y_true
         self.y_pred = y_pred
         self.protected_attributes = protected_attributes
+        self.protected_attribute_names = protected_attribute_names
     
     def accuracy(self, group_mask=None) -> float:
         if group_mask is None:
@@ -115,12 +115,11 @@ class FairnessMetrics:
             list[float]: SPD values
         """
         unpriv_metrics_list, priv_metrics_list = self.get_group_metrics()
-        spd_val_list = []
-        for unpriv_metrics, priv_metrics in zip(unpriv_metrics_list, priv_metrics_list):
+        spd_val_list = {}
+        for attribute, unpriv_metrics, priv_metrics in zip(self.protected_attribute_names, unpriv_metrics_list, priv_metrics_list):
             prob_pos_unpriv = unpriv_metrics['positive_pred'] / unpriv_metrics['total']
             prob_pos_priv = priv_metrics['positive_pred'] / priv_metrics['total']
-            spd_val_list.append(round(prob_pos_unpriv - prob_pos_priv, 2))
-        
+            spd_val_list[f"spd_{attribute}"] = round(prob_pos_unpriv - prob_pos_priv, 2)
         return spd_val_list
 
     def intersectional_spd(self):
@@ -192,8 +191,7 @@ class FairnessMetrics:
                         unpriv_metrics['positive_true'] if unpriv_metrics['positive_true'] > 0 else 0)
             tpr_priv = (priv_metrics['true_positive'] / 
                         priv_metrics['positive_true'] if priv_metrics['positive_true'] > 0 else 0)
-            eod_val_list.append(round(tpr_unpriv - tpr_priv))
-        
+            eod_val_list.append(round(tpr_unpriv - tpr_priv, 3))
         return eod_val_list
 
 class DifferentialFairnessMetrics:
@@ -289,7 +287,7 @@ class DifferentialFairnessMetrics:
         model_epsilon = self.differential_fairness()
         return model_epsilon - data_epsilon
     
-def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
+def compute_all_metrics(y_true, y_pred, protected_attributes, protected_attribute_names) -> dict:
     """
     Compute all fairness metrics at once.
     
@@ -301,7 +299,7 @@ def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
     Returns:
         Dictionary containing all fairness metrics
     """
-    metrics = FairnessMetrics(y_true, y_pred, protected_attributes)
+    metrics = FairnessMetrics(y_true, y_pred, protected_attributes, protected_attribute_names)
     df_metrics = DifferentialFairnessMetrics(y_true, y_pred, protected_attributes)
     data_df = DifferentialFairnessMetrics(y_true, y_true, protected_attributes)
     data_epsilon = data_df.differential_fairness()
@@ -310,7 +308,7 @@ def compute_all_metrics(y_true, y_pred, protected_attributes) -> dict:
         'precision': metrics.precision(),
         'recall': metrics.recall(),
         'f1': metrics.f1(),
-        'statistical_parity_difference': np.mean(metrics.statistical_parity_difference()),
+        'spd': np.mean(list(metrics.statistical_parity_difference().values())),
         'intersectional_spd': metrics.intersectional_spd(),
         'average_odds_difference': np.mean(metrics.average_odds_difference()),
         'equal_opportunity_difference': np.mean(metrics.equal_opportunity_difference()),

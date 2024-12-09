@@ -1,6 +1,6 @@
 from metrics import compute_all_metrics
 from utils import read_data, read_and_split_data, get_args
-from model import Vanilla, Adversary, MultiAdversary
+from model import Vanilla, Adversary, ImprovedAdversary, MultiAdversary
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 from sklearn.model_selection import KFold
@@ -56,6 +56,19 @@ def train_adversarial_model(X_train_scaled, y_train, protected_attribute_names, 
     adv_model.fit(X_train_scaled, y_train, protected_train)
     return adv_model
 
+def train_improved_adversarial_model(X_train_scaled, y_train, protected_attribute_names, protected_shapes, num_epochs, lambda_reg, protected_train, learning_rate):
+    adv_model = ImprovedAdversary(
+        input_shape=X_train_scaled.shape[1],
+        protected_attribute_names=protected_attribute_names,
+        protected_shapes=protected_shapes,
+        epochs=num_epochs,
+        initial_lambda=0.1,
+        max_lambda=2.0,
+        learning_rate=learning_rate
+    )
+    adv_model.fit(X_train_scaled, y_train, protected_train)
+    return adv_model
+
 def train_multi_adversarial_model(X_train_scaled, y_train, protected_attribute_names, protected_shapes, num_epochs, lambda_reg, protected_train, learning_rate, num_adversaries):
     print("protected attributers:", protected_attribute_names)
     print("protected shapes:", protected_shapes)
@@ -71,12 +84,13 @@ def train_multi_adversarial_model(X_train_scaled, y_train, protected_attribute_n
     multi_adv_model.fit(X_train_scaled, y_train, protected_train)
     return multi_adv_model
 
-def evaluate_model(model, X_test_scaled, y_test, protected_attributes):
+def evaluate_model(model, X_test_scaled, y_test, protected_attributes, protected_attribute_names):
     y_pred = model.predict(X_test_scaled)
     metrics = compute_all_metrics(
         y_true=y_test.values,
         y_pred=y_pred,
-        protected_attributes=protected_attributes
+        protected_attributes=protected_attributes,
+        protected_attribute_names=protected_attribute_names
     )
     return metrics
 
@@ -91,10 +105,11 @@ if __name__ == "__main__":
         ('-pa', '--protected_attributes', None, list),
         ('-ts', '--target_string', 'Probability', str),
         ('-o', '--output_file', None, str),
-        ('-e', '--epochs', 10, int),
+        ('-e', '--epochs', 5, int),
         ('-lreg', '--lambda_reg', 0.1, float),
         ('-lr', '--learning-rate', 3e-3, float),
-        ('-f', '--folds', 5, int)
+        ('-f', '--folds', 5, int),
+        ('-b', '--batch_size', 32, int)
     ]
     args = get_args(arg_list)
     initialize_non_default_args(args)
@@ -120,6 +135,7 @@ if __name__ == "__main__":
                                             X_test_scaled=X_test_scaled, 
                                             y_test=y_test, 
                                             protected_attributes=[X_test[attr].values for attr in args.protected_attributes],
+                                            protected_attribute_names=args.protected_attributes
              )
             vanilla_metrics["fold"] = fold
             vanilla_metrics["model"] = "vanilla"
@@ -135,38 +151,54 @@ if __name__ == "__main__":
                                                 protected_train=protected_train,
                                                 learning_rate=lr)
             adv_metrics = evaluate_model(
-                adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
+                adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes], args.protected_attributes
             )
             adv_metrics["fold"] = fold
             adv_metrics["model"] = "adversary"
             adv_metrics["lr"] = str(lr)
             adv_metrics["lambda_reg"] = args.lambda_reg
             fold_metrics.append(adv_metrics)
-
-
-            # multi_adv_model = train_multi_adversarial_model(
-            #     X_train_scaled=X_train_scaled, 
-            #     y_train=y_train, 
-            #     protected_attribute_names=args.protected_attributes, 
-            #     protected_shapes=protected_shapes, 
-            #     num_epochs=args.epochs, 
-            #     lambda_reg=args.lambda_reg, 
-            #     protected_train=protected_train,
-            #     learning_rate=lr,
-            #     num_adversaries = 2
-            # )
             
-            # multi_adv_metrics = evaluate_model(
-            #     multi_adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes]
-            # )
-            # multi_adv_metrics["fold"] = fold
-            # multi_adv_metrics["model"] = "multi-adversary"
-            # multi_adv_metrics["lr"] = lr
-            # fold_metrics.append(multi_adv_metrics)
+            improved_adv_model = train_improved_adversarial_model(X_train_scaled=X_train_scaled, 
+                                                y_train=y_train, 
+                                                protected_attribute_names=args.protected_attributes, 
+                                                protected_shapes=protected_shapes, 
+                                                num_epochs=args.epochs, 
+                                                lambda_reg=args.lambda_reg, 
+                                                protected_train=protected_train,
+                                                learning_rate=lr)
+            improved_adv_metrics = evaluate_model(
+                improved_adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes], args.protected_attributes
+            )
+            improved_adv_metrics["fold"] = fold
+            improved_adv_metrics["model"] = "improved"
+            improved_adv_metrics["lr"] = str(lr)
+            fold_metrics.append(improved_adv_metrics)
+
+
+            multi_adv_model = train_multi_adversarial_model(
+                X_train_scaled=X_train_scaled, 
+                y_train=y_train, 
+                protected_attribute_names=args.protected_attributes, 
+                protected_shapes=protected_shapes, 
+                num_epochs=args.epochs, 
+                lambda_reg=args.lambda_reg, 
+                protected_train=protected_train,
+                learning_rate=lr,
+                num_adversaries = 2
+            )
+            
+            multi_adv_metrics = evaluate_model(
+                multi_adv_model, X_test_scaled, y_test, [X_test[attr].values for attr in args.protected_attributes], args.protected_attributes
+            )
+            multi_adv_metrics["fold"] = fold
+            multi_adv_metrics["model"] = "multi-adversary"
+            multi_adv_metrics["lr"] = lr
+            fold_metrics.append(multi_adv_metrics)
 
 
     # print("multi: ", multi_adv_metrics)
-        save_results_to_output(fold_metrics, args.output_file)
+            save_results_to_output(fold_metrics, args.output_file)
 
 
     
