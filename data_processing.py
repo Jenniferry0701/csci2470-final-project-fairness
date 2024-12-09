@@ -75,13 +75,19 @@ def process_default():
     df_processed.loc[:, 'sex'] = df_processed['sex'].map({1: 1, 2: 0})
 
     # reindex 'age' column to ensure it fits into the range [0, num_unique_ages]
+    # TODO: if considering age as protected attribute, need to consider which categories are "privileged" vs "unprivileged"
     unique_ages = df_processed['age'].unique()
     age_to_index = {age: idx for idx, age in enumerate(sorted(unique_ages))}
     df_processed.loc[:, 'age'] = df_processed['age'].map(age_to_index)
 
+    threshold_age_index = age_to_index[25]  # Map threshold age (e.g., 25) to its reindexed value
+    df_processed['age_category'] = df_processed['age'].apply(
+        lambda x: 1 if x >= threshold_age_index else 0
+    )
+
     df_processed.to_csv('./data/default_processed.csv', index=False)
 
 if __name__ == "__main__":
-    process_adult()
-    process_compas()
+    # process_adult()
+    # process_compas()
     process_default()
