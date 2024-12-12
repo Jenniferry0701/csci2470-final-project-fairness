@@ -196,8 +196,6 @@ if __name__ == "__main__":
             multi_adv_metrics["lr"] = lr
             fold_metrics.append(multi_adv_metrics)
 
-
-    # print("multi: ", multi_adv_metrics)
             save_results_to_output(fold_metrics, args.output_file)
 
 

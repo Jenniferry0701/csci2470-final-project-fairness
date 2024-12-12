@@ -178,19 +178,14 @@ class ImprovedAdversary(Vanilla):
         self.max_lambda = max_lambda
         self.base_learning_rate = learning_rate
         
-        # Initialize fairness metrics history
         self.fairness_history = {name: [] for name in protected_attribute_names}
-        
-        # Build model components
         self.model = self._build_improved_model()
         
     def _build_improved_model(self):
         
         """Build the complete model ensuring proper tensor connectivity"""
-        # Main input
         inputs = keras.layers.Input(shape=(self.input_shape,))
         
-        # Predictor network
         x = keras.layers.Dense(64, activation="leaky_relu")(inputs)
         x = keras.layers.BatchNormalization()(x)
         x = keras.layers.Dropout(0.2)(x)
@@ -202,28 +197,20 @@ class ImprovedAdversary(Vanilla):
         x = keras.layers.Dense(16, activation="leaky_relu")(x)
         x = keras.layers.BatchNormalization()(x)
         
-        # Intermediate layer for adversary
         intermediate = keras.layers.Dense(8, activation="leaky_relu", name="intermediate_layer")(x)
-        
-        # Main output
         main_output = keras.layers.Dense(1, activation="sigmoid", name="main_output")(intermediate)
         
-        # Adversary network
-        # First branch - deep
         adv_x1 = keras.layers.Dense(32, activation="leaky_relu")(intermediate)
         adv_x1 = keras.layers.BatchNormalization()(adv_x1)
         adv_x1 = keras.layers.Dense(16, activation="leaky_relu")(adv_x1)
         adv_x1 = keras.layers.BatchNormalization()(adv_x1)
         
-        # Second branch - skip connection
         adv_x2 = keras.layers.Dense(16, activation="leaky_relu")(intermediate)
         adv_x2 = keras.layers.BatchNormalization()(adv_x2)
         
-        # Combine branches
         adv_x = keras.layers.Add()([adv_x1, adv_x2])
         adv_x = keras.layers.Dropout(0.3)(adv_x)
         
-        # Create adversary outputs
         adversary_outputs = []
         for name, shape in zip(self.protected_attribute_names, self.protected_shapes):
             output = keras.layers.Dense(
@@ -233,9 +220,7 @@ class ImprovedAdversary(Vanilla):
             )(adv_x)
             adversary_outputs.append(output)
         
-        # Create model with all outputs
-        model = keras.Model(inputs=inputs, outputs=[main_output] + adversary_outputs)
-        
+        model = keras.Model(inputs=inputs, outputs=[main_output] + adversary_outputs)        
         return model
     
     def fit(self, X, y, protected_labels, validation_data=None):
@@ -243,19 +228,13 @@ class ImprovedAdversary(Vanilla):
         history = []
         
         for epoch in range(self.epochs):
-            # Adjust learning rate
             current_lr = self._adjust_learning_rate(epoch)
-            
-            # Make predictions for fairness calculation
             y_pred = self.predict(X)
             
-            # Calculate fairness metrics
             metrics = FairnessMetrics(y, y_pred, protected_labels, self.protected_attribute_names)
             fairness_metrics = metrics.statistical_parity_difference()
-            # Update lambda weights
             lambda_weights = self._update_lambda_weights(fairness_metrics)
             
-            # Compile model with updated weights
             self.model.compile(
                 optimizer=keras.optimizers.legacy.Adam(learning_rate=current_lr),
                 loss={
@@ -275,7 +254,6 @@ class ImprovedAdversary(Vanilla):
                 }
             )
             
-            # Prepare training data
             training_data = {
                 "main_output": y,
                 **{f"protected_{name}_prediction": labels 
@@ -283,7 +261,6 @@ class ImprovedAdversary(Vanilla):
                     self.protected_attribute_names, protected_labels)}
             }
             
-            # Train one epoch
             epoch_history = self.model.fit(
                 X,
                 training_data,
@@ -310,11 +287,14 @@ class ImprovedAdversary(Vanilla):
     
     def _adjust_learning_rate(self, epoch):
         """Implement adaptive learning rate schedule"""
-        if epoch < self.epochs * 0.3:  # Warm-up phase
+        # Warm-up phase
+        if epoch < self.epochs * 0.3:  
             return self.base_learning_rate
-        elif epoch < self.epochs * 0.6:  # Normal training
+        # Normal training
+        elif epoch < self.epochs * 0.6:  
             return self.base_learning_rate * 0.1
-        else:  # Fine-tuning
+         # Fine-tuning
+        else: 
             return self.base_learning_rate * 0.01
     
     def _update_lambda_weights(self, fairness_metrics):
@@ -388,18 +368,15 @@ class MultiAdversary(Vanilla):
             'adversary_2': [32, 32, 32]  # Uniform network
         }
 
-        # Input layer for intermediate representations
-        inputs = keras.layers.Input(shape=(8,))  # Match intermediate_layer size
+        inputs = keras.layers.Input(shape=(8,))
         x = inputs
 
-        # Build hidden layers based on architecture
-        hidden_sizes = architectures.get(name, [32, 16])  # Default if more adversaries
+        hidden_sizes = architectures.get(name, [32, 16])
         for size in hidden_sizes:
             x = keras.layers.Dense(size, activation="leaky_relu")(x)
             x = keras.layers.Dropout(0.2)(x)
             x = keras.layers.BatchNormalization()(x)
 
-        # Output heads for each protected attribute
         outputs = []
         for attr_name, shape in zip(self.protected_attribute_names, self.protected_shapes):
             output = keras.layers.Dense(
@@ -417,20 +394,15 @@ class MultiAdversary(Vanilla):
 
     def fit(self, X, y, protected_labels):
         """Train the model with main task labels and protected attribute labels"""
-        # Input layer for the combined model
         input_layer = keras.layers.Input(shape=(self.input_shape,))
-
-        # Predictor outputs
         predictor_output = self.predictor(input_layer)
 
-        # Extract intermediate output from the predictor for adversaries
         intermediate_layer_model = keras.Model(
             inputs=self.predictor.input,
             outputs=self.predictor.get_layer("intermediate_layer").output
         )
         intermediate_output = intermediate_layer_model(input_layer)
 
-        # Adversary outputs
         all_adversary_outputs = {}
         for i, adversary in enumerate(self.adversaries):
             adversary_outputs = adversary(intermediate_output)
@@ -441,18 +413,15 @@ class MultiAdversary(Vanilla):
                 output_name = f"adversary_{i}_{attr_name}"
                 all_adversary_outputs[output_name] = output
 
-        # Create the combined model
         combined_model_outputs = {"main_output": predictor_output, **all_adversary_outputs}
         combined_model = keras.Model(
             inputs=input_layer,
             outputs=combined_model_outputs
         )
 
-        # Compile the model
         loss_dict = {"main_output": "binary_crossentropy"}
         loss_weights = {"main_output": 1.0}
 
-        # Add adversary loss functions and weights
         for i in range(self.num_adversaries):
             for attr_name, shape in zip(self.protected_attribute_names, self.protected_shapes):
                 output_name = f"adversary_{i}_{attr_name}"
@@ -470,13 +439,11 @@ class MultiAdversary(Vanilla):
             metrics=["accuracy"]
         )
 
-        # Prepare training labels
         training_labels = {"main_output": y}
         for i in range(self.num_adversaries):
             for attr_name, labels in zip(self.protected_attribute_names, protected_labels):
                 training_labels[f"adversary_{i}_{attr_name}"] = labels
 
-        # Train the combined model
         history = combined_model.fit(
             X,
             training_labels,
